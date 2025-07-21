@@ -140,3 +140,113 @@ public:
 };
 
 // Two-level cache simulator
+class TwoLevelCache {
+private:
+    Cache* l1_cache;
+    Cache* l2_cache;
+    int dram_penalty;
+
+public:
+    TwoLevelCache(int l1_line_size) : dram_penalty(50) {
+        l1_cache = new Cache(L1_CACHE_SIZE, l1_line_size, L1_ASSOCIATIVITY, 1);
+        l2_cache = new Cache(L2_CACHE_SIZE, L2_LINE_SIZE, L2_ASSOCIATIVITY, 10);
+    }
+
+    ~TwoLevelCache() {
+        delete l1_cache;
+        delete l2_cache;
+    }
+
+    void reset() {
+        l1_cache->reset();
+        l2_cache->reset();
+    }
+
+    int memoryAccess(unsigned int addr, accessType type) {
+        int cycles = 0;
+
+        // Try L1 cache first
+        pair<cacheResType, bool> l1_result = l1_cache->access(addr, type);
+        cycles += l1_cache->getHitTime();  // Always pay L1 access time
+
+        if (l1_result.first == HIT) {
+            return cycles;  // L1 hit
+        }
+
+        // L1 miss - handle L1 writeback if needed
+        if (l1_result.second) {
+            // Need to write dirty line from L1 to L2
+            // This is simplified - in reality we'd need the victim address
+            cycles += l2_cache->getHitTime();
+        }
+
+        // Check L2 for the requested data
+        pair<cacheResType, bool> l2_result = l2_cache->access(addr, READ_ACCESS);  // Fixed: READ_ACCESS
+        cycles += l2_cache->getHitTime();
+
+        if (l2_result.first == HIT) {
+            // L2 hit - data found in L2
+            return cycles;
+        }
+
+        // L2 miss - go to DRAM
+        cycles += dram_penalty;
+
+        // Handle L2 writeback if needed
+        if (l2_result.second) {
+            cycles += dram_penalty;  // Write dirty L2 line to DRAM
+        }
+
+        return cycles;
+    }
+};
+
+// Function pointer type for memory generators
+typedef unsigned int (*MemGenFunc)();
+
+// Simulation function
+double runSimulation(MemGenFunc memGen, int l1_line_size, const string& gen_name, bool verbose = false) {
+    TwoLevelCache cache(l1_line_size);
+    unsigned long long total_cycles = 0;
+    int memory_access_count = 0;
+
+    for (int i = 0; i < NO_OF_ITERATIONS; i++) {
+        double p = (double)rand_() / (double)0xFFFFFFFF;
+
+        if (p <= 0.35) {  // 35% memory instructions
+            unsigned int addr = memGen();
+            double rdwr = (double)rand_() / (double)0xFFFFFFFF;
+            accessType type = (rdwr < 0.5) ? READ_ACCESS : WRITE_ACCESS;
+
+            int cycles = cache.memoryAccess(addr, type);
+            total_cycles += cycles;
+            memory_access_count++;
+
+            // Optional verbose output
+            if (verbose) {
+                cout << "Access " << setw(7) << memory_access_count
+                     << " (Iter " << setw(7) << i << "): 0x"
+                     << setfill('0') << setw(8) << hex << addr
+                     << setfill(' ') << " - ";
+                if (cycles == 1) {
+                    cout << "L1 HIT  (1 cycle)";
+                } else if (cycles <= 11) {
+                    cout << "L2 HIT  (" << dec << cycles << " cycles)";
+                } else {
+                    cout << "L2 MISS (" << dec << cycles << " cycles)";
+                }
+                cout << "\n";
+            }
+        } else {
+            total_cycles += 1;  // Non-memory instruction takes 1 cycle
+        }
+    }
+
+    if (verbose) {
+        cout << "Total memory accesses: " << memory_access_count << "\n";
+        cout << "Total cycles: " << total_cycles << "\n";
+    }
+
+    double cpi = (double)total_cycles / NO_OF_ITERATIONS;
+    return cpi;
+}
