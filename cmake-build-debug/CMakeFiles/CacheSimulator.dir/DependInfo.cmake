@@ -8,7 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/Users/ahmedelfishawy/Desktop/CacheSimulator/main.cpp" "CMakeFiles/CacheSimulator.dir/main.cpp.o" "gcc" "CMakeFiles/CacheSimulator.dir/main.cpp.o.d"
+  "C:/Users/AUC/Downloads/New folder/CacheSimulator/main.cpp" "CMakeFiles/CacheSimulator.dir/main.cpp.obj" "gcc" "CMakeFiles/CacheSimulator.dir/main.cpp.obj.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

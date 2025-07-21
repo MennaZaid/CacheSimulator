@@ -1,8 +1,10 @@
 file(REMOVE_RECURSE
-  "CMakeFiles/CacheSimulator.dir/main.cpp.o"
-  "CMakeFiles/CacheSimulator.dir/main.cpp.o.d"
-  "CacheSimulator"
+  "CMakeFiles/CacheSimulator.dir/main.cpp.obj"
+  "CMakeFiles/CacheSimulator.dir/main.cpp.obj.d"
+  "CacheSimulator.exe"
+  "CacheSimulator.exe.manifest"
   "CacheSimulator.pdb"
+  "libCacheSimulator.dll.a"
 )
 
 # Per-language clean rules from dependency scanning.

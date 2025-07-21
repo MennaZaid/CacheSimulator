@@ -250,3 +250,93 @@ double runSimulation(MemGenFunc memGen, int l1_line_size, const string& gen_name
     double cpi = (double)total_cycles / NO_OF_ITERATIONS;
     return cpi;
 }
+int main() {
+    cout << "Two-Level Cache Simulator Results\n";
+    cout << "=================================\n\n";
+
+    // Memory generators array
+    MemGenFunc generators[5] = {memGen1, memGen2, memGen3, memGen4, memGen5};
+    string gen_names[5] = {"memGen1", "memGen2", "memGen3", "memGen4", "memGen5"};
+
+    // L1 line sizes to test
+    int line_sizes[4] = {16, 32, 64, 128};
+
+    // Results table header
+    cout << setw(12) << "Generator";
+    for (int i = 0; i < 4; i++) {
+        cout << setw(12) << (to_string(line_sizes[i]) + "B");
+    }
+    cout << "\n" << string(60, '-') << "\n";
+
+    // Run simulations
+    for (int gen = 0; gen < 5; gen++) {
+        cout << setw(12) << gen_names[gen];
+
+        for (int size = 0; size < 4; size++) {
+            double cpi = runSimulation(generators[gen], line_sizes[size], gen_names[gen]);
+
+            cout << setw(12) << fixed << setprecision(3) << cpi;
+        }
+        cout << "\n";
+    }
+
+    cout << "\nSimulation Parameters:\n";
+    cout << "- L1 Cache: " << (L1_CACHE_SIZE/1024) << "KB, " << L1_ASSOCIATIVITY
+         << "-way associative, 1 cycle hit time\n";
+    cout << "- L2 Cache: " << (L2_CACHE_SIZE/1024) << "KB, " << L2_ASSOCIATIVITY
+         << "-way associative, 10 cycle hit time\n";
+    cout << "- DRAM: 50 cycle penalty\n";
+    cout << "- " << NO_OF_ITERATIONS << " iterations per simulation\n";
+    cout << "- 35% memory instructions, 50% reads, 50% writes\n";
+    cout << "- Write-back policy with random replacement\n\n";
+
+    // Sample run for analysis
+    // Sample run for analysis with hit/miss counters
+    // Replace the sample analysis section with this improved version:
+
+    cout << "\nDetailed Pattern Analysis:\n";
+    cout << "=========================\n";
+
+    // Show brief analysis for each generator to demonstrate different behaviors
+    MemGenFunc analysis_generators[5] = {memGen1, memGen2, memGen3, memGen4, memGen5};
+    string analysis_names[5] = {"memGen1 (Sequential)", "memGen2 (Random 24KB)", "memGen3 (Random 64MB)", "memGen4 (Small Loop)", "memGen5 (Strided)"};
+
+    for (int g = 0; g < 5; g++) {
+        cout << "\n" << analysis_names[g] << " - First 15 accesses:\n";
+        cout << setw(6) << "Access" << setw(12) << "Address" << setw(10) << "Result" << setw(8) << "Cycles\n";
+        cout << string(42, '-') << "\n";
+
+        TwoLevelCache analysis_cache(64);
+        int l1_hits = 0, l2_hits = 0, l2_misses = 0;
+
+        for (int i = 0; i < 15; i++) {
+            unsigned int addr = analysis_generators[g]();
+            int cycles = analysis_cache.memoryAccess(addr, READ_ACCESS);
+
+            string result;
+            if (cycles == 1) {
+                result = "L1_HIT";
+                l1_hits++;
+            } else if (cycles <= 11) {
+                result = "L2_HIT";
+                l2_hits++;
+            } else {
+                result = "L2_MISS";
+                l2_misses++;
+            }
+
+            cout << setw(6) << (i+1) << " 0x" << setfill('0') << setw(8) << hex << addr
+                 << setfill(' ') << setw(10) << result << setw(8) << dec << cycles << "\n";
+        }
+
+        cout << "Pattern: L1=" << l1_hits << " L2=" << l2_hits << " Miss=" << l2_misses << "\n";
+    }
+
+    cout << "\nMemory Generator Patterns:\n";
+    cout << "- memGen1: Sequential access (0,1,2,3...) - Good locality\n";
+    cout << "- memGen2: Random in 24KB space - Limited locality\n";
+    cout << "- memGen3: Random in full 64MB - Poor locality\n";
+    cout << "- memGen4: Sequential in 4KB loop - Excellent locality\n";
+    cout << "- memGen5: Strided by 32 bytes - Moderate locality\n";
+    return 0;
+}
