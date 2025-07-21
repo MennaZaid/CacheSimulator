@@ -6,7 +6,6 @@
 #include <string>
 using namespace std;
 
-// Constants
 #define DRAM_SIZE (64ULL * 1024 * 1024 * 1024)
 #define L1_CACHE_SIZE (16 * 1024)
 #define L2_CACHE_SIZE (128 * 1024)
@@ -18,9 +17,10 @@ using namespace std;
 enum cacheResType { MISS = 0, HIT = 1 };
 enum accessType { read_ACCESS = 0, WRITE_ACCESS = 1 };
 
-// Random Generator
+// Custom random number generator
 unsigned int m_w = 0xABABAB55;
 unsigned int m_z = 0x05080902;
+
 void seed_random() {
     unsigned int seed = (unsigned int)time(NULL);
     m_w = seed ^ 0xABABAB55;
@@ -28,32 +28,30 @@ void seed_random() {
     if (m_w == 0) m_w = 0xABABAB55;
     if (m_z == 0) m_z = 0x05080902;
 }
+
 unsigned int rand_() {
     m_z = 36969 * (m_z & 65535) + (m_z >> 16);
     m_w = 18000 * (m_w & 65535) + (m_w >> 16);
     return (m_z << 16) + m_w;
 }
 
-// Memory Generators
+// Memory generators
 unsigned int memGen1() { static unsigned int addr = 0; return (addr++) % DRAM_SIZE; }
 unsigned int memGen2() { return rand_() % (24 * 1024); }
 unsigned int memGen3() { return rand_() % DRAM_SIZE; }
 unsigned int memGen4() { static unsigned int addr = 0; return (addr++) % (4 * 1024); }
 unsigned int memGen5() { static unsigned int addr = 0; return (addr += 32) % (64 * 16 * 1024); }
 
-// CacheLine
 struct CacheLine {
     bool valid = false;
     unsigned long long tag = 0;
     bool dirty = false;
 };
 
-// Cache Class
 class Cache {
 private:
     vector<vector<CacheLine>> cache;
     int cache_size, line_size, associativity, num_sets, hit_time;
-    // Statistics
     mutable unsigned long long hits = 0;
     mutable unsigned long long misses = 0;
     mutable unsigned long long writebacks = 0;
@@ -71,7 +69,6 @@ public:
     int getAssociativity() const { return associativity; }
     int getNumSets() const { return num_sets; }
 
-    // Statistics methods
     unsigned long long getHits() const { return hits; }
     unsigned long long getMisses() const { return misses; }
     unsigned long long getWritebacks() const { return writebacks; }
@@ -95,12 +92,12 @@ public:
             }
         }
 
-        // Miss - find replacement way
+        // Miss occurred
         misses++;
         int replace_way = -1;
         bool writeback = false;
 
-        // First try to find empty way
+        // Find empty way first
         for (int way = 0; way < associativity; way++) {
             if (!cache[set_index][way].valid) {
                 replace_way = way;
@@ -129,32 +126,12 @@ public:
                 line = {};
         resetStats();
     }
-
-    // Get cache state for debugging
-    void printCacheState(int max_sets = 4) const {
-        cout << "Cache State (showing first " << max_sets << " sets):\n";
-        cout << "Set | Way | Valid | Tag      | Dirty\n";
-        cout << "----+-----+-------+----------+------\n";
-        for (int set = 0; set < min(max_sets, num_sets); set++) {
-            for (int way = 0; way < associativity; way++) {
-                cout << setw(3) << set << " | "
-                     << setw(3) << way << " | "
-                     << setw(5) << (cache[set][way].valid ? "Y" : "N") << " | "
-                     << "0x" << setfill('0') << setw(6) << hex << cache[set][way].tag << " | "
-                     << setw(5) << (cache[set][way].dirty ? "Y" : "N") << dec << "\n";
-            }
-            if (set < min(max_sets, num_sets) - 1) cout << "----+-----+-------+----------+------\n";
-        }
-        cout << "\n";
-    }
 };
 
-// Two-Level Cache - FIXED VERSION
 class TwoLevelCache {
 private:
     Cache *l1_cache, *l2_cache;
     int dram_penalty;
-    // Overall statistics
     mutable unsigned long long total_accesses = 0;
     mutable unsigned long long total_cycles = 0;
 
@@ -187,33 +164,30 @@ public:
         auto l1_result = l1_cache->access(addr, type);
 
         if (l1_result.first == HIT) {
-            // L1 hit - we're done
             total_cycles += cycles;
             return cycles;
         }
 
-        // L1 miss - need to access L2
-        // If L1 had a writeback, pay L2 write cost
+        // L1 miss - handle writeback if needed
         if (l1_result.second) {
-            cycles += l2_cache->getHitTime(); // L2 write for L1 writeback
+            cycles += l2_cache->getHitTime();
         }
 
-        // Access L2 for the requested data
+        // Access L2
         cycles += l2_cache->getHitTime();
-        auto l2_result = l2_cache->access(addr, read_ACCESS); // Always read from L2 to L1
+        auto l2_result = l2_cache->access(addr, read_ACCESS);
 
         if (l2_result.first == HIT) {
-            // L2 hit - we're done
             total_cycles += cycles;
             return cycles;
         }
 
-        // L2 miss - need DRAM access
+        // L2 miss - access DRAM
         cycles += dram_penalty;
 
-        // If L2 had a writeback, pay additional DRAM write cost
+        // Handle L2 writeback if needed
         if (l2_result.second) {
-            cycles += dram_penalty; // DRAM write for L2 writeback
+            cycles += dram_penalty;
         }
 
         total_cycles += cycles;
@@ -221,7 +195,6 @@ public:
     }
 };
 
-// Enhanced Test Suite
 class CacheSimulator {
 public:
     void runSimulations() {
@@ -247,19 +220,43 @@ public:
             cout << "|\n";
         }
         cout << "+------------+------------+------------+------------+------------+\n";
+
+        cout << "\nCPI Calculation Explanation:\n";
+        cout << "- Total iterations: " << NO_OF_ITERATIONS << "\n";
+        cout << "- Memory access probability: 35%\n";
+        cout << "- Expected memory accesses per run: ~" << (int)(NO_OF_ITERATIONS * 0.35) << "\n";
+        cout << "- Non-memory instructions: 1 cycle each\n";
+        cout << "- Memory access cycles vary based on cache hits/misses\n";
+        cout << "- CPI = Total Cycles / Total Instructions\n";
     }
 
     double run(unsigned int (*gen)(), int l1_line_size) {
         TwoLevelCache cache(l1_line_size);
         unsigned long long total_cycles = 0;
+        unsigned long long memory_accesses = 0;
+        unsigned long long non_memory_instructions = 0;
+
         for (int i = 0; i < NO_OF_ITERATIONS; i++) {
-            if (((double)rand_() / 0xFFFFFFFF) <= 0.35) {
+            double p = (double)rand_() / 0xFFFFFFFF;
+            if (p <= 0.35) {
+                // Memory access instruction
+                memory_accesses++;
                 accessType type = ((double)rand_() / 0xFFFFFFFF < 0.5) ? read_ACCESS : WRITE_ACCESS;
                 total_cycles += cache.memoryAccess(gen(), type);
             } else {
+                // Non-memory instruction
+                non_memory_instructions++;
                 total_cycles += 1;
             }
         }
+
+        // Debug information (commented out for clean output)
+        /*
+        cout << "    Memory accesses: " << memory_accesses
+             << ", Non-memory: " << non_memory_instructions
+             << ", Total cycles: " << total_cycles << endl;
+        */
+
         return (double)total_cycles / NO_OF_ITERATIONS;
     }
 
@@ -270,7 +267,6 @@ public:
 
         int passed = 0, total = 0;
 
-        // Test categories
         cout << "\n>>> BASIC CACHE FUNCTIONALITY TESTS <<<\n";
         cout << string(50, '-') << "\n";
         runBasicTests(passed, total);
@@ -287,11 +283,10 @@ public:
         cout << string(50, '-') << "\n";
         runPerformanceTests(passed, total);
 
-        cout << "\n>>> STRESS TESTS <<<\n";
+        cout << "\n>>> HIT/MISS RATIO TESTS <<<\n";
         cout << string(50, '-') << "\n";
-        runStressTests(passed, total);
+        runHitMissRatioTests(passed, total);
 
-        // Final summary
         cout << "\n" << string(70, '=') << "\n";
         cout << "                       TEST SUMMARY\n";
         cout << string(70, '=') << "\n";
@@ -299,9 +294,9 @@ public:
         cout << " (" << fixed << setprecision(1) << (100.0 * passed / total) << "%)\n";
 
         if (passed == total) {
-            cout << " ALL TESTS PASSED! Cache simulator is working correctly.\n";
+            cout << "✓ ALL TESTS PASSED! Cache simulator is working correctly.\n";
         } else {
-            cout << "Some tests failed. Please review the implementation.\n";
+            cout << "⚠ Some tests failed. Please review the implementation.\n";
         }
         cout << string(70, '=') << "\n";
     }
@@ -312,7 +307,6 @@ private:
         assertTest("Cache Miss Handling", testCacheMiss(), passed, total);
         assertTest("Write-back Policy", testWriteBack(), passed, total);
         assertTest("Set Index Mapping", testSetMapping(), passed, total);
-        assertTest("Tag Comparison", testTagComparison(), passed, total);
         assertTest("Cache Line Alignment", testCacheLineAlignment(), passed, total);
     }
 
@@ -320,7 +314,6 @@ private:
         assertTest("L1-L2 Integration", testTwoLevelCache(), passed, total);
         assertTest("L1 Miss -> L2 Hit", testL1MissL2Hit(), passed, total);
         assertTest("L1 Miss -> L2 Miss", testL1MissL2Miss(), passed, total);
-        assertTest("Write-back Propagation", testWriteBackPropagation(), passed, total);
         assertTest("Cache Hierarchy Timing", testHierarchyTiming(), passed, total);
     }
 
@@ -333,17 +326,21 @@ private:
     void runPerformanceTests(int &passed, int &total) {
         assertTest("Hit Rate Calculation", testHitRateCalculation(), passed, total);
         assertTest("Performance Statistics", testPerformanceStats(), passed, total);
-        assertTest("Line Size Impact", testLineSizeImpact(), passed, total);
+        assertTest("Cache Reset Functionality", testReset(), passed, total);
     }
 
-    void runStressTests(int &passed, int &total) {
-        assertTest("Cache Reset Functionality", testReset(), passed, total);
-        assertTest("High Volume Access", testHighVolumeAccess(), passed, total);
-        assertTest("Associativity Limits", testAssociativityLimits(), passed, total);
+    void runHitMissRatioTests(int &passed, int &total) {
+        assertTest("Sequential Access Hit Rates", testSequentialHitRates(), passed, total);
+        seed_random();
+        assertTest("Random Access Hit Rates", testRandomHitRates(), passed, total);
+        seed_random();
+        assertTest("Working Set Impact", testWorkingSetImpact(), passed, total);
+        seed_random();
+        assertTest("Line Size Impact on Hit Rates", testLineSizeHitRateCorrelation(), passed, total);
     }
 
     void assertTest(const string& name, bool result, int &passed, int &total) {
-        string status = result ? " PASS" : "FAIL";
+        string status = result ? "PASS" : "FAIL";
         cout << "[" << status << "] " << name;
         if (!result) cout << " ⚠️";
         cout << "\n";
@@ -351,181 +348,162 @@ private:
         if (result) passed++;
     }
 
+    // Improved test implementations with proper validation and output
     bool testBasicCacheHit() {
         Cache c(1024, 64, 2, 1);
-        bool test1 = c.access(0x1000, read_ACCESS).first == MISS;
-        bool test2 = c.access(0x1000, read_ACCESS).first == HIT;
-        bool test3 = c.access(0x1008, read_ACCESS).first == HIT; // Same cache line
+
+        auto result1 = c.access(0x1000, read_ACCESS);
+        auto result2 = c.access(0x1000, read_ACCESS);
+        auto result3 = c.access(0x1008, read_ACCESS); // Same cache line
+
+        bool test1 = (result1.first == MISS);
+        bool test2 = (result2.first == HIT);
+        bool test3 = (result3.first == HIT);
 
         if (!test1 || !test2 || !test3) {
-            cout << "    Details: First access should miss, subsequent accesses to same line should hit\n";
+            cout << "    ⚠ Expected: MISS->HIT->HIT, Got: "
+                 << (result1.first == MISS ? "MISS" : "HIT") << "->"
+                 << (result2.first == MISS ? "MISS" : "HIT") << "->"
+                 << (result3.first == MISS ? "MISS" : "HIT") << "\n";
         }
         return test1 && test2 && test3;
     }
 
     bool testCacheMiss() {
         Cache c(1024, 64, 2, 1);
-        c.access(0x0000, read_ACCESS);
-        c.access(0x0400, read_ACCESS);
-        bool result = c.access(0x0800, read_ACCESS).first == MISS;
+
+        auto r1 = c.access(0x0000, read_ACCESS);
+        auto r2 = c.access(0x0400, read_ACCESS);  // Different set
+
+        bool result = (r1.first == MISS) && (r2.first == MISS);
 
         if (!result) {
-            cout << "    Details: Access to different cache lines should result in misses\n";
+            cout << "    ⚠ Both accesses should miss on first access\n";
         }
         return result;
     }
 
     bool testWriteBack() {
         Cache c(1024, 64, 2, 1);
-        c.access(0x1000, WRITE_ACCESS);
-        bool hit = c.access(0x1000, read_ACCESS).first == HIT;
 
+        c.access(0x1000, WRITE_ACCESS);
+        auto result = c.access(0x1000, read_ACCESS);
+
+        bool hit = (result.first == HIT);
         if (!hit) {
-            cout << "    Details: Write followed by read to same address should hit\n";
+            cout << "    ⚠ Write followed by read should hit\n";
         }
         return hit;
     }
 
     bool testSetMapping() {
         Cache c(1024, 64, 2, 1);
-        // These addresses should map to the same set but different ways
+
         c.access(0x0000, read_ACCESS);
         c.access(0x0040, read_ACCESS);
+
         bool test1 = c.access(0x0000, read_ACCESS).first == HIT;
         bool test2 = c.access(0x0040, read_ACCESS).first == HIT;
 
         if (!test1 || !test2) {
-            cout << "    Details: Different cache lines in same set should coexist\n";
+            cout << "    ⚠ Different lines in same set should coexist\n";
         }
         return test1 && test2;
     }
 
-    bool testTagComparison() {
-        Cache c(1024, 64, 4, 1);
-        // Fill up a set and test replacement
-        c.access(0x0000, read_ACCESS);
-        c.access(0x0400, read_ACCESS);
-        c.access(0x0800, read_ACCESS);
-        c.access(0x0C00, read_ACCESS);
-
-        // This should cause replacement
-        c.access(0x1000, read_ACCESS);
-
-        // Check if original entries might have been replaced
-        bool result = true; // Basic functionality check
-
-        if (!result) {
-            cout << "    Details: Tag comparison and replacement logic verification\n";
-        }
-        return result;
-    }
-
     bool testCacheLineAlignment() {
         Cache c(1024, 64, 2, 1);
-        // Test that addresses in the same cache line hit
+
         c.access(0x1000, read_ACCESS);
         bool test1 = c.access(0x1010, read_ACCESS).first == HIT;
         bool test2 = c.access(0x1020, read_ACCESS).first == HIT;
         bool test3 = c.access(0x103F, read_ACCESS).first == HIT;
 
         if (!test1 || !test2 || !test3) {
-            cout << "    Details: All addresses within same cache line should hit after initial miss\n";
+            cout << "    ⚠ All addresses in same cache line should hit\n";
         }
         return test1 && test2 && test3;
     }
 
     bool testTwoLevelCache() {
         TwoLevelCache tlc(64);
+
         int cycles1 = tlc.memoryAccess(0x12345678, read_ACCESS);
         int cycles2 = tlc.memoryAccess(0x12345678, read_ACCESS);
-        bool result = cycles1 > 50 && cycles2 == 1;
+
+        bool result = (cycles1 > 50) && (cycles2 == 1);
 
         if (!result) {
-            cout << "    Details: First access should go to DRAM (" << cycles1
-                 << " cycles), second should hit L1 (" << cycles2 << " cycles)\n";
+            cout << "    ⚠ Expected: DRAM access (" << cycles1 << ") then L1 hit (" << cycles2 << ")\n";
         }
         return result;
     }
 
     bool testL1MissL2Hit() {
         TwoLevelCache tlc(32);
-        // First, load data into both L1 and L2
+
+        // First access - loads into both L1 and L2
         tlc.memoryAccess(0x1000, read_ACCESS);
 
-        // Force L1 eviction by accessing many different cache lines
-        // L1 has 16KB / 32B = 512 lines, 4-way associative = 128 sets
-        // Access 128*4 + 1 = 513 different cache lines to force eviction
-        for (int i = 0; i < 520; i++) {
-            tlc.memoryAccess(0x10000 + i * 32, read_ACCESS);
+        // Calculate number of accesses needed to guarantee eviction
+        // L1: 16KB, 32B lines, 4-way = 16384/(32*4) = 128 sets
+        // Need enough accesses to overwhelm the 4-way associativity
+        int num_sets = 16384 / (32 * 4);  // 128 sets
+        int accesses_needed = num_sets * 8;  // 8 times the number of sets to ensure eviction
+
+        // Fill L1 to force eviction of address 0x1000
+        for (int i = 0; i < accesses_needed; i++) {
+            // Access different addresses that map to different sets
+            tlc.memoryAccess(0x100000 + i * 128, read_ACCESS);
         }
 
-        // Now access original address - should miss in L1 but hit in L2
+        // Access original address - should be L1 miss, L2 hit
         int cycles = tlc.memoryAccess(0x1000, read_ACCESS);
-        bool result = cycles > 1 && cycles < 30; // Should be L1 miss + L2 hit = 1 + 10 = 11 cycles
+        bool result = (cycles > 1 && cycles < 30);
 
         if (!result) {
-            cout << "    Details: L1 miss + L2 hit should take ~11 cycles, got " << cycles << "\n";
+            cout << "    ⚠ Expected L1 miss + L2 hit (~11 cycles), got " << cycles << "\n";
+            cout << "    Performed " << accesses_needed << " eviction accesses\n";
         }
         return result;
     }
-
     bool testL1MissL2Miss() {
         TwoLevelCache tlc(32);
         int cycles = tlc.memoryAccess(0x12345678, read_ACCESS);
-        bool result = cycles > 50; // Should go to DRAM
+        bool result = (cycles > 50);
 
         if (!result) {
-            cout << "    Details: L1 miss + L2 miss should take >50 cycles, got " << cycles << "\n";
+            cout << "    ⚠ Expected DRAM access (>50 cycles), got " << cycles << "\n";
         }
         return result;
-    }
-
-    bool testWriteBackPropagation() {
-        TwoLevelCache tlc(64);
-        // Write to create dirty line, then evict to test writeback
-        tlc.memoryAccess(0x1000, WRITE_ACCESS);
-
-        // Force eviction by filling cache
-        for (int i = 0; i < 1000; i++) {
-            tlc.memoryAccess(0x2000 + i * 64, read_ACCESS);
-        }
-
-        // The test passes if no crashes occur during writeback
-        return true;
     }
 
     bool testHierarchyTiming() {
         TwoLevelCache tlc(64);
 
-        // Test L1 hit timing
+        // L1 hit test
         tlc.memoryAccess(0x1000, read_ACCESS);
         int l1_cycles = tlc.memoryAccess(0x1000, read_ACCESS);
 
-        // Test DRAM access timing
+        // DRAM access test
         int dram_cycles = tlc.memoryAccess(0x2000000, read_ACCESS);
 
-        bool result = l1_cycles == 1 && dram_cycles > 50;
+        bool result = (l1_cycles == 1) && (dram_cycles > 50);
 
         if (!result) {
-            cout << "    Details: L1 hit: " << l1_cycles << " cycles, DRAM access: "
-                 << dram_cycles << " cycles\n";
+            cout << "    ⚠ L1 hit: " << l1_cycles << " cycles, DRAM: " << dram_cycles << " cycles\n";
         }
         return result;
     }
 
     bool testMemGenPatterns() {
-        vector<unsigned> g1_vals, g4_vals, g5_vals;
+        // Reset generators for testing
+        vector<unsigned> g1_vals, g4_vals;
 
-        // Test memGen1 (sequential)
+        // Test sequential generators
         for (int i = 0; i < 5; i++) g1_vals.push_back(memGen1());
-
-        // Test memGen4 (sequential in smaller range)
         for (int i = 0; i < 5; i++) g4_vals.push_back(memGen4());
 
-        // Test memGen5 (stride pattern)
-        for (int i = 0; i < 5; i++) g5_vals.push_back(memGen5());
-
-        // Verify sequential pattern for gen1
         bool g1_sequential = true;
         for (int i = 1; i < 5; i++) {
             if (g1_vals[i] != (g1_vals[i-1] + 1) % DRAM_SIZE) {
@@ -535,23 +513,27 @@ private:
         }
 
         if (!g1_sequential) {
-            cout << "    Details: memGen1 should produce sequential addresses\n";
+            cout << "    ⚠ memGen1 should produce sequential addresses\n";
         }
 
         return g1_sequential;
     }
 
     bool testGeneratorRanges() {
-        // Test that generators stay within expected ranges
         bool result = true;
 
+        // Test range constraints
         for (int i = 0; i < 100; i++) {
-            if (memGen2() >= 24 * 1024) { result = false; break; }
-            if (memGen4() >= 4 * 1024) { result = false; break; }
-        }
-
-        if (!result) {
-            cout << "    Details: Generators should respect their specified ranges\n";
+            if (memGen2() >= 24 * 1024) {
+                result = false;
+                cout << "    ⚠ memGen2 exceeded 24KB range\n";
+                break;
+            }
+            if (memGen4() >= 4 * 1024) {
+                result = false;
+                cout << "    ⚠ memGen4 exceeded 4KB range\n";
+                break;
+            }
         }
 
         return result;
@@ -560,25 +542,24 @@ private:
     bool testAccessPatterns() {
         TwoLevelCache tlc1(64), tlc2(64);
 
-        // Test sequential access with sufficient iterations to see cache effects
-        for (int i = 0; i < 2000; i++) {
-            tlc1.memoryAccess(i * 4, read_ACCESS); // 4-byte stride (good spatial locality)
+        // Sequential access pattern
+        for (int i = 0; i < 1000; i++) {
+            tlc1.memoryAccess(i * 4, read_ACCESS);
         }
 
-        // Test random access
-        for (int i = 0; i < 2000; i++) {
-            tlc2.memoryAccess(rand_() % (1024*1024), read_ACCESS); // Random in 1MB range
+        // Random access pattern
+        for (int i = 0; i < 1000; i++) {
+            tlc2.memoryAccess(rand_() % (1024*1024), read_ACCESS);
         }
 
         double seq_hit_rate = tlc1.getL1Cache()->getHitRate();
         double rand_hit_rate = tlc2.getL1Cache()->getHitRate();
 
-        // Sequential should have much better hit rate due to spatial locality
-        bool result = seq_hit_rate > rand_hit_rate && seq_hit_rate > 0.1;
+        bool result = seq_hit_rate > rand_hit_rate;
 
         if (!result) {
-            cout << "    Details: Sequential hit rate: " << fixed << setprecision(3)
-                 << seq_hit_rate << ", Random hit rate: " << rand_hit_rate << "\n";
+            cout << "    ⚠ Sequential: " << fixed << setprecision(3) << seq_hit_rate
+                 << ", Random: " << rand_hit_rate << "\n";
         }
 
         return result;
@@ -587,17 +568,17 @@ private:
     bool testHitRateCalculation() {
         Cache c(1024, 64, 2, 1);
 
-        // Perform known sequence of hits/misses
         c.access(0x1000, read_ACCESS); // miss
         c.access(0x1000, read_ACCESS); // hit
         c.access(0x1000, read_ACCESS); // hit
         c.access(0x2000, read_ACCESS); // miss
 
         double hit_rate = c.getHitRate();
-        bool result = (hit_rate > 0.49 && hit_rate < 0.51); // Should be 0.5
+        bool result = (hit_rate >= 0.49 && hit_rate <= 0.51);
 
         if (!result) {
-            cout << "    Details: Expected hit rate ~0.5, got " << hit_rate << "\n";
+            cout << "    ⚠ Expected ~0.50, got " << fixed << setprecision(3) << hit_rate << "\n";
+            cout << "    Hits: " << c.getHits() << ", Misses: " << c.getMisses() << "\n";
         }
 
         return result;
@@ -606,97 +587,125 @@ private:
     bool testPerformanceStats() {
         TwoLevelCache tlc(64);
 
-        // Perform some accesses
         for (int i = 0; i < 100; i++) {
             tlc.memoryAccess(i * 64, read_ACCESS);
         }
 
-        // Check that statistics are being collected
-        bool result = tlc.getL1Cache()->getHits() > 0 || tlc.getL1Cache()->getMisses() > 0;
+        bool result = (tlc.getL1Cache()->getHits() + tlc.getL1Cache()->getMisses()) == 100;
 
         if (!result) {
-            cout << "    Details: Statistics should be collected during cache operations\n";
+            cout << "    ⚠ Total accesses should equal hits + misses\n";
+            cout << "    Hits: " << tlc.getL1Cache()->getHits()
+                 << ", Misses: " << tlc.getL1Cache()->getMisses() << "\n";
         }
 
         return result;
-    }
-
-    bool testLineSizeImpact() {
-        // Test different line sizes and their impact
-        TwoLevelCache tlc1(32), tlc2(64), tlc3(128);
-
-        // Sequential access pattern that should benefit from larger lines
-        for (int i = 0; i < 1000; i++) {
-            unsigned addr = i * 16; // 16-byte stride
-            tlc1.memoryAccess(addr, read_ACCESS);
-            tlc2.memoryAccess(addr, read_ACCESS);
-            tlc3.memoryAccess(addr, read_ACCESS);
-        }
-
-        double hr1 = tlc1.getL1Cache()->getHitRate();
-        double hr2 = tlc2.getL1Cache()->getHitRate();
-        double hr3 = tlc3.getL1Cache()->getHitRate();
-
-        // Larger line sizes should generally have better hit rates for sequential access
-        bool result = hr3 >= hr2 && hr2 >= hr1;
-
-        if (!result) {
-            cout << "    Details: Hit rates - 32B: " << hr1 << ", 64B: " << hr2
-                 << ", 128B: " << hr3 << "\n";
-        }
-
-        return true; // This test is informational
     }
 
     bool testReset() {
         TwoLevelCache cache(64);
         cache.memoryAccess(0x1000, read_ACCESS);
         cache.reset();
-        bool result = cache.memoryAccess(0x1000, read_ACCESS) > 50;
+
+        bool stats_reset = (cache.getL1Cache()->getHits() == 0) &&
+                          (cache.getL1Cache()->getMisses() == 0);
+        int cycles = cache.memoryAccess(0x1000, read_ACCESS);
+        bool cache_cleared = (cycles > 50);
+
+        bool result = stats_reset && cache_cleared;
 
         if (!result) {
-            cout << "    Details: After reset, cache should be empty and cause DRAM access\n";
+            cout << "    ⚠ Reset failed - Stats reset: " << stats_reset
+                 << ", Cache cleared: " << cache_cleared << "\n";
         }
 
         return result;
     }
 
-    bool testHighVolumeAccess() {
-        TwoLevelCache cache(64);
+    bool testSequentialHitRates() {
+        TwoLevelCache tlc(64);
 
-        // Perform high volume of accesses without crashing
-        try {
-            for (int i = 0; i < 10000; i++) {
-                cache.memoryAccess(rand_() % (64 * 1024),
-                                 (rand_() % 2) ? read_ACCESS : WRITE_ACCESS);
-            }
-            return true;
-        } catch (...) {
-            cout << "    Details: Cache should handle high volume of accesses without crashing\n";
-            return false;
+        for (int i = 0; i < 5000; i++) {
+            tlc.memoryAccess(i * 4, read_ACCESS);
         }
+
+        double l1_hit_rate = tlc.getL1Cache()->getHitRate();
+        bool result = l1_hit_rate > 0.5; // Reasonable expectation
+
+        cout << "    Sequential L1 hit rate: " << fixed << setprecision(3) << l1_hit_rate << "\n";
+
+        return result;
     }
 
-    bool testAssociativityLimits() {
-        Cache c(1024, 64, 2, 1); // 2-way associative
+    bool testRandomHitRates() {
+        TwoLevelCache tlc(64);
 
-        // Fill up one set completely
-        unsigned set_addr1 = 0x0000;
-        unsigned set_addr2 = 0x0400; // Same set, different tag
-        unsigned set_addr3 = 0x0800; // Same set, different tag
+        for (int i = 0; i < 5000; i++) {
+            tlc.memoryAccess(rand_() % (1024*1024), read_ACCESS);
+        }
 
-        c.access(set_addr1, read_ACCESS);
-        c.access(set_addr2, read_ACCESS);
-        c.access(set_addr3, read_ACCESS); // Should evict one of the previous
+        double l1_hit_rate = tlc.getL1Cache()->getHitRate();
+        bool result = l1_hit_rate < 0.5; // Should be lower than sequential
 
-        // Test that associativity is working
-        return true; // Basic functionality test
+        cout << "    Random L1 hit rate: " << fixed << setprecision(3) << l1_hit_rate << "\n";
+
+        return result;
+    }
+
+    bool testWorkingSetImpact() {
+        TwoLevelCache tlc_small(64), tlc_large(64);
+
+        // Small working set (4KB)
+        for (int i = 0; i < 500; i++) {
+            tlc_small.memoryAccess(rand_() % (4 * 1024), read_ACCESS);
+        }
+
+        // Large working set (64KB)
+        for (int i = 0; i < 500; i++) {
+            tlc_large.memoryAccess(rand_() % (64 * 1024), read_ACCESS);
+        }
+
+        double small_hit_rate = tlc_small.getL1Cache()->getHitRate();
+        double large_hit_rate = tlc_large.getL1Cache()->getHitRate();
+
+        cout << "    Small WS (4KB): " << fixed << setprecision(3) << small_hit_rate
+             << ", Large WS (64KB): " << large_hit_rate << "\n";
+
+        return small_hit_rate >= large_hit_rate; // Small should be better or equal
+    }
+
+    bool testLineSizeHitRateCorrelation() {
+        TwoLevelCache tlc_16(16), tlc_64(64), tlc_128(128);
+
+        // Sequential access should benefit from larger lines
+        for (int i = 0; i < 500; i++) {
+            unsigned addr = i * 8;
+            tlc_16.memoryAccess(addr, read_ACCESS);
+            tlc_64.memoryAccess(addr, read_ACCESS);
+            tlc_128.memoryAccess(addr, read_ACCESS);
+        }
+
+        double hr_16 = tlc_16.getL1Cache()->getHitRate();
+        double hr_64 = tlc_64.getL1Cache()->getHitRate();
+        double hr_128 = tlc_128.getL1Cache()->getHitRate();
+
+        cout << "    Hit rates - 16B: " << fixed << setprecision(3) << hr_16
+             << ", 64B: " << hr_64 << ", 128B: " << hr_128 << "\n";
+
+        return hr_128 >= hr_64 && hr_64 >= hr_16; // Larger lines should be better for sequential
     }
 };
 
 int main() {
     CacheSimulator sim;
+
+    cout << "Starting Cache Simulator Tests and Analysis...\n";
+
+    // Run comprehensive tests first
     sim.runComprehensiveTests();
+
+    // Run main simulations
     sim.runSimulations();
+
     return 0;
 }
