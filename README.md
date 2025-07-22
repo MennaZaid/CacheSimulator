@@ -130,9 +130,15 @@ This project presents a performance analysis of a two-level set-associative cach
 - Integrated L1–L2–DRAM pipeline  
 
 ### Mennatallah Essam
-- Built the simulation loop  
-- Computed and displayed CPI statistics  
-- Managed tabular output formatting and performance data collection  
+-Designed the main simulation loop and execution logic
+
+-Implemented memory access tracking and result collection
+
+-Formatted and displayed cache statistics clearly for analysis
+
+-Built the CPI calculation logic based on hit/miss penalties
+
+-Integrated all modules into a working multi-level cache simulation
 
 > **Each member played a key role in building a reliable, flexible, and accurate cache simulator.**
 
